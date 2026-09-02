@@ -10,7 +10,7 @@ The first thought you may have in mind is to have an offchain system, a bot or a
 @bot.on_(chain.blocks)
 def distribute_rewards(block):
     for staker in stakers:
-      token.transfer(staker, calculate_rewards_amount(staker))
+        token.transfer(staker, calculate_rewards_amount(staker))
 ```
 
 This sounds really simple, using something like [Silverback](https://docs.apeworx.io/silverback/latest/userguides/quickstart.html) and you are all set, while it may be possible for some cases you are going to encounter two issues, one is going to be gas cost, you are going to see insane amounts of gas beign used while trying to do this and the other issue is going be that maybe the bot goes down, if that happens, that leads stakers getting less than they expect.
