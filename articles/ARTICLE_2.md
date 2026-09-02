@@ -2,7 +2,7 @@
 
 Staking rewards look complicated. They are not.
 
-I went through a pile of articles on staking, and the mechanism is simpler than I expected. If you are going to ship a pool, you need to understand this model.
+I went through a pile of articles on staking, and the mechanism is simpler than I expected. If you are going to ship a staking pool, you need to understand this model.
 
 ## The naive way
 
@@ -35,7 +35,7 @@ So you store `reward_per_token_stored_paid` for Bob, and you subtract it later. 
 
 That is the MasterChef idea, and it is small once you see it: track what one token has accrued since t=0, then store an offset per user because not everyone started at t=0. That offset is the reward debt.
 
-Every time someone interacts (stake, unstake, harvest), you update the index first. No active staker is cheated for time they were in. Time with zero stake is not paid to the next depositor, and you are not paying the whole set on every block.
+Every time someone interacts (stake, unstake, harvest), you update the index first. No active staker is cheated for time they were in. Time with zero stake isn't paid to the next depositor, and you don't pay the whole set every block.
 
 In this guide we implement it in Vyper, mostly from Unipool and the Synthetix staking rewards pattern. MasterChef and Unipool are not the same contract. I will mark where they split.
 
@@ -109,7 +109,7 @@ Then the index, the reward rate, and the timestamps. `period_finish` and `reward
 Unipool keeps rewards separate. The user has to harvest to receive them. MasterChef pays on interaction: stake (if they already had a stake) or withdraw.
 
 ```vyper
-# @dev We store when is the staking rewards period going to end.
+# @dev We store when the staking rewards period is going to end.
 #      Since there is no way to update this in this implementation we
 #      are going to store this as an immutable.
 period_finish: public(immutable(uint256))
@@ -131,8 +131,9 @@ Per staker: the last index they were paid against, and rewards already owed but 
 If they harvested when `reward_per_token_stored` was 3, and it is 7 now, those first 3 are done. `rewards` is the snapshot of unclaimed earnings, so a later deposit or withdraw does not drop them if they have not harvested yet.
 
 ```vyper
-# @dev Personal mark that each staker is going to have, tracks what was the last
-#      `reward_per_token_stored` that the user got paid
+# @dev Personal mark that each staker is going to have,
+#      tracks what was the last `reward_per_token_stored`
+#      that the user got paid
 reward_per_token_stored_paid: public(HashMap[address, uint256])
 
 # @dev Tracks how much rewards a user is owed.
@@ -154,7 +155,7 @@ And a WAD scale for the accumulator. This is Q-notation precision for `reward_pe
 PRECISION: constant(uint256) = 10**18
 ```
 
-Set `period_finish`, `reward_rate`, and `last_update_time` in the constructor. Assert the two tokens are different.
+Set `period_finish`, `reward_rate`, and `last_update_time` in the constructor. Assert that the two tokens are different.
 
 ```vyper
 @deploy
@@ -171,7 +172,7 @@ def __init__(
   self.last_update_time = block.timestamp
 ```
 
-From this contract's point of view, rewards run from deploy until 9 days later.
+From this contract's point of view, rewards run from deployment until 9 days later.
 
 Events you actually want in a production pool:
 
@@ -267,7 +268,7 @@ def deposit(amount: uint256):
   log Staked(user=msg.sender, amount=amount)
 ```
 
-Zero amount reverts. Then update the pool, before any balance change. Then bump `total_supply` and the user's balance, transfer in (CEI), emit `Staked`.
+Zero amount reverts. Then update the pool before any balance change. Then bump `total_supply` and the user's balance, transfer in (CEI), and emit `Staked`.
 
 Withdraw:
 
