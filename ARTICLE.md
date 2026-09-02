@@ -199,7 +199,7 @@ def _reward_per_token() -> uint256:
   if self.total_supply == 0:
     return self.reward_per_token_stored
 
-  return self.reward_per_token_stored + ((_last_time_reward_applicable() - self.last_update_time) * PRECISION) // self.total_supply
+  return self.reward_per_token_stored + ((_last_time_reward_applicable() - self.last_update_time) * self.reward_rate * PRECISION) // self.total_supply
 ```
 
 Like I said, this part of the algorithm is essential, if we analize it line by line we are going to find a few things. First is that if the total_supply of tokens staked is 0, we do not need to do any calculation, the reward rate was set at the beginning. Else, we do a calculation, we add to reward_per_token_stored the increment, that increment beign the difference between _last_time_reward_applicable and the last time we updated the pool, divided by the total supply. The dilution is automatic, is going to happen.
@@ -217,13 +217,12 @@ With these two functions in place we can calculate how much any given staker has
 @internal
 @view
 def _earned(account: address) -> uint256:
-  return self.balance_of[account] * (self._reward_per_token() - self.reward_per_token_stored_paid[account]) // PRECISION + self.rewards[account]
+  return self.balances[account] * (self._reward_per_token() - self.reward_per_token_stored_paid[account]) // PRECISION + self.rewards[account]
 ```
 
 Now, with all these internal view functions we can do the most essential part of the staking smart contract, the _update_pool smatr contract.
 ```vyper
 @internal
-@view
 def _update_pool(account: address) -> uint256:
   self.reward_per_token_stored: uint256 = self._reward_per_token()
   self.last_update_time = self._last_time_reward_applicable()
@@ -246,7 +245,7 @@ def deposit(amount: uint256):
   assert amount > 0 # dev: invalid deposit amount
   self._update_pool(msg.sender)
   self.total_supply += amount
-  self.balance_of[msg.sender] += amount
+  self.balances[msg.sender] += amount
   extcall staking_token.transferFrom(msg.sender, self, amount)
   log Staked(user=msg.sender, amount=amount)
 ```
@@ -259,7 +258,7 @@ def withdraw(amount: uint256):
   assert amount > 0 # dev: invalid withdraw amount
   self._update_pool(msg.sender)
   self.total_supply -= amount
-  self.balance_of[msg.sender] -= amount
+  self.balances[msg.sender] -= amount
   extcall staking_token.transfer(msg.sender, amount)
   log Withdrawn(user=msg.sender, amount=amount)
 ```
@@ -280,6 +279,42 @@ def harvest():
 If we go over line by line in this functiono we are going to see a few things, First (you see where this is going) upadte the pooool!!!!! The order is important here, we want to make sure the rewards earned by our staker are up to date before doing the harvest, we take the amount of tokens earned, if there aren't any we just revert, else, we reset the rewards to 0, and (following CEI) transfer the reward tokens
 
 We could also add an exit function, a function that withdraws and harvest at the same time, imm going to do that for the resulting code at the end of this article, but if you want to give it a try go for it!
+
+## Extra view functions
+We should add the folliwng view fucntions for better functinality:
+
+```vyper
+@external
+@view
+def balanceOf(account: address) -> uint256:
+    return self.balances[account]
+
+
+@external
+@view
+def totalSupply() -> uint256:
+    return self.total_supply
+
+
+
+@external
+@view
+def last_time_reward_applicable() -> uint256:
+    return self._last_time_reward_applicable()
+
+
+@external
+@view
+def reward_per_token() -> uint256:
+    return self._reward_per_token()
+
+
+@internal
+@view
+def earned(account: address) -> uint256:
+    return self._earned(account)
+```
+
 
 ## Conclusion
 
