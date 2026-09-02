@@ -1,5 +1,5 @@
 # pragma version ==0.4.3
-# pragma nonreentrancy off
+# pragma nonreentrancy on
 
 # @dev We import the built-in IERC20 interface.
 from ethereum.ercs import IERC20
@@ -27,13 +27,13 @@ balances: HashMap[address, uint256]
 period_finish: public(immutable(uint256))
 
 
-# @dev The initial reward rate per token stored.
+# @dev Reward tokens distributed per second across the whole pool.
 #      Since there is no way to update this in this implementation we
 #      are going to store this as an immutable.
 reward_rate: public(immutable(uint256))
 
 
-# @dev We store the last time some interacted with the pool.
+# @dev We store the last time someone interacted with the pool.
 last_update_time: public(uint256)
 
 
@@ -54,26 +54,24 @@ rewards: public(HashMap[address, uint256])
 DURATION: constant(uint256) = 777600
 
 
-# @dev Used for calculations, since we are working with Q-notation
-#      We are goinig to store 1 WAD. This number is going to be different
-#      if you are woirking with tokens with different decimals, for example
-#      USDT or USDC.
+# @dev Accumulator scale (1 WAD). This is Q-notation precision for
+#      reward_per_token_stored, not the staking or rewards token decimals.
 PRECISION: constant(uint256) = 1 * 10**18
 
 
-# @dev TODO
+# @dev Emitted when a user stakes tokens.
 event Staked:
     user: indexed(address)
     amount: uint256
 
 
-# @dev TODO
+# @dev Emitted when a user withdraws staked tokens.
 event Withdrawn:
     user: indexed(address)
     amount: uint256
 
 
-# @dev TODO
+# @dev Emitted when a user harvests staking rewards.
 event RewardPaid:
     user: indexed(address)
     reward: uint256
@@ -83,10 +81,12 @@ event RewardPaid:
 def __init__(
     _staking_token: IERC20, _rewards_token: IERC20, _reward_rate: uint256
 ):
+    assert _staking_token != _rewards_token  # dev: staking and rewards tokens must differ
     staking_token = _staking_token
     rewards_token = _rewards_token
     period_finish = block.timestamp + DURATION
     reward_rate = _reward_rate
+    self.last_update_time = block.timestamp
 
 
 @internal
@@ -104,7 +104,7 @@ def _reward_per_token() -> uint256:
     return (
         self.reward_per_token_stored
         + (
-            (self._last_time_reward_applicable() - block.timestamp)
+            (self._last_time_reward_applicable() - self.last_update_time)
             * reward_rate
             * PRECISION
         ) // self.total_supply
@@ -190,7 +190,7 @@ def reward_per_token() -> uint256:
     return self._reward_per_token()
 
 
-@internal
+@external
 @view
 def earned(account: address) -> uint256:
     return self._earned(account)
